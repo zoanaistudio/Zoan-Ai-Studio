@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1220">
-<title>Zoan AI Studio — v0.3</title>
+<title>Zoan AI Studio — v0.4</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1220;--panel:#121d30;--panel2:#17253b;--line:#263752;--muted:#9aabc2;--text:#edf4ff;--blue:#64b5ff;--cyan:#68e0d2;--green:#8be0ad}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% -10%,#19385a 0,transparent 34%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -18,7 +18,7 @@
 <div class="wrap">
 <header class="top">
  <div class="brand"><div class="logo">Z</div><div><b>Zoan AI Studio</b><small>Creative video workspace</small></div></div>
- <span class="tag">PROTOTYPE · v0.3</span>
+ <span class="tag">PROTOTYPE · v0.4</span>
 </header>
 <section class="hero">
  <div class="eyebrow">CREATE · EXPERIMENT · GROW</div>
@@ -53,6 +53,16 @@
    <label for="savedProjects">Proyek tersimpan</label>
    <select id="savedProjects"><option value="">Memuat daftar proyek...</option></select>
    <button class="btn" id="loadProject" type="button">Buka Proyek</button>
+   <div class="field">
+    <label>Kelola proyek terpilih</label>
+    <div class="modes">
+     <button class="mode" id="updateProject" type="button"><b>Perbarui Proyek</b><small>Simpan perubahan ke proyek yang sama</small></button>
+     <button class="mode" id="renameProject" type="button"><b>Ubah Nama</b><small>Ganti nama proyek tersimpan</small></button>
+    </div>
+    <button class="btn" id="deleteProject" type="button" style="background:linear-gradient(90deg,#ff9a9a,#ff6f83)">Hapus Proyek</button>
+   </div>
+   <div class="notice">Pilih proyek dari daftar sebelum memperbarui, mengganti nama, atau menghapusnya.</div>
+
   </div>
   <div class="notice">Proyek disimpan di browser/perangkat ini. Belum tersinkron ke akun GitHub atau perangkat lain.</div>
   <button class="btn" id="generate">Siapkan generasi (demo)</button>
@@ -77,214 +87,88 @@
 <div class="footer">Zoan AI Studio · Dibangun bertahap dari nol</div>
 </div>
 <script>
-const file = document.getElementById('imageFile');
-const preview = document.getElementById('preview');
-const promptField = document.getElementById('prompt');
-const projectName = document.getElementById('projectName');
-const savedProjects = document.getElementById('savedProjects');
-const status = document.getElementById('status');
-const resolution = document.getElementById('resolution');
-const duration = document.getElementById('duration');
-const durationHint = document.getElementById('durationHint');
-
-let mode = 'Free';
-let selectedImageData = '';
-
-function setStatus(message) {
-  status.innerHTML = '<b>Status:</b> ' + message;
+const file=document.getElementById('imageFile'), preview=document.getElementById('preview');
+const promptField=document.getElementById('prompt'), projectName=document.getElementById('projectName');
+const savedProjects=document.getElementById('savedProjects'), status=document.getElementById('status');
+const resolution=document.getElementById('resolution'), duration=document.getElementById('duration');
+const durationHint=document.getElementById('durationHint');
+let mode='Free', selectedImageData='', activeProjectId='';
+function setStatus(message){status.innerHTML='<b>Status:</b> '+message;}
+function setMode(next){mode=next;document.getElementById('freeMode').classList.toggle('active',next==='Free');document.getElementById('byokMode').classList.toggle('active',next==='BYOK');}
+document.getElementById('freeMode').addEventListener('click',()=>setMode('Free'));
+document.getElementById('byokMode').addEventListener('click',()=>setMode('BYOK'));
+function updateDuration(keepFive=false){
+ if(resolution.value==='720p'){duration.innerHTML='<option value="5">5 detik</option>';duration.value='5';durationHint.textContent='720p: durasi dibatasi maksimal 5 detik.';}
+ else{duration.innerHTML='<option value="5">5 detik</option><option value="10">10 detik</option>';duration.value=keepFive?'5':'10';durationHint.textContent='480p: pilihan durasi 5 atau 10 detik.';}
 }
-
-function setMode(next) {
-  mode = next;
-  document.getElementById('freeMode').classList.toggle('active', next === 'Free');
-  document.getElementById('byokMode').classList.toggle('active', next === 'BYOK');
-}
-document.getElementById('freeMode').addEventListener('click', () => setMode('Free'));
-document.getElementById('byokMode').addEventListener('click', () => setMode('BYOK'));
-
-function updateDuration(keepFive = false) {
-  if (resolution.value === '720p') {
-    duration.innerHTML = '<option value="5">5 detik</option>';
-    duration.value = '5';
-    durationHint.textContent = '720p: durasi dibatasi maksimal 5 detik.';
-  } else {
-    duration.innerHTML = '<option value="5">5 detik</option><option value="10">10 detik</option>';
-    duration.value = keepFive ? '5' : '10';
-    durationHint.textContent = '480p: pilihan durasi 5 atau 10 detik.';
-  }
-}
-resolution.addEventListener('change', () => updateDuration(false));
-updateDuration();
-
-file.addEventListener('change', () => {
-  const selected = file.files && file.files[0];
-  if (!selected) return;
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(selected.type)) {
-    setStatus('Gunakan gambar PNG, JPG, atau WEBP.');
-    file.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    selectedImageData = String(reader.result || '');
-    preview.src = selectedImageData;
-    preview.style.display = 'block';
-    setStatus('Gambar referensi siap digunakan.');
-  };
-  reader.onerror = () => setStatus('Gambar gagal dibaca. Coba pilih ulang.');
-  reader.readAsDataURL(selected);
+resolution.addEventListener('change',()=>updateDuration(false));updateDuration();
+file.addEventListener('change',()=>{
+ const f=file.files&&file.files[0];if(!f)return;
+ if(!['image/png','image/jpeg','image/webp'].includes(f.type)){setStatus('Gunakan gambar PNG, JPG, atau WEBP.');file.value='';return;}
+ const reader=new FileReader();reader.onload=()=>{selectedImageData=String(reader.result||'');preview.src=selectedImageData;preview.style.display='block';};
+ reader.onerror=()=>setStatus('Gambar gagal dibaca.');reader.readAsDataURL(f);
 });
-
-// Penyimpanan lokal menggunakan IndexedDB (tanpa server/biaya hosting tambahan).
-const DB_NAME = 'ZoanAIStudioDB';
-const DB_VERSION = 1;
-let dbPromise;
-
-function openDatabase() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    if (!('indexedDB' in window)) {
-      reject(new Error('Browser ini belum mendukung penyimpanan proyek.'));
-      return;
-    }
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains('projects')) {
-        database.createObjectStore('projects', { keyPath: 'id' });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error('Database tidak bisa dibuka.'));
-  });
-  return dbPromise;
+const DB_NAME='ZoanAIStudioDB', DB_VERSION=1;let dbPromise;
+function openDB(){if(dbPromise)return dbPromise;dbPromise=new Promise((resolve,reject)=>{
+ const req=indexedDB.open(DB_NAME,DB_VERSION);
+ req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains('projects'))req.result.createObjectStore('projects',{keyPath:'id'});};
+ req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+ });return dbPromise;}
+async function getProject(id){const db=await openDB();return new Promise((resolve,reject)=>{const r=db.transaction('projects','readonly').objectStore('projects').get(id);r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error);});}
+async function getAll(){const db=await openDB();return new Promise((resolve,reject)=>{const r=db.transaction('projects','readonly').objectStore('projects').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});}
+async function putProject(p){const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction('projects','readwrite');t.objectStore('projects').put(p);t.oncomplete=resolve;t.onerror=()=>reject(t.error);});}
+async function removeProject(id){const db=await openDB();return new Promise((resolve,reject)=>{const t=db.transaction('projects','readwrite');t.objectStore('projects').delete(id);t.oncomplete=resolve;t.onerror=()=>reject(t.error);});}
+function safe(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function collect(id,name){return{id,name,prompt:promptField.value.trim(),imageData:selectedImageData||'',mode,ratio:document.getElementById('ratio').value,resolution:resolution.value,duration:duration.value,updatedAt:Date.now()};}
+function valid(name){if(!name.trim()){setStatus('Isi nama proyek terlebih dahulu.');projectName.focus();return false;}if(!promptField.value.trim()){setStatus('Isi prompt video terlebih dahulu.');promptField.focus();return false;}return true;}
+async function refresh(selected=activeProjectId){
+ const list=(await getAll()).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));savedProjects.innerHTML='';
+ if(!list.length){savedProjects.add(new Option('Belum ada proyek tersimpan',''));activeProjectId='';return;}
+ savedProjects.add(new Option('Pilih proyek...',''));
+ list.forEach(p=>savedProjects.add(new Option((p.name||'Tanpa nama')+' — '+new Date(p.updatedAt).toLocaleString('id-ID'),p.id)));
+ if(list.some(p=>p.id===selected)){savedProjects.value=selected;activeProjectId=selected;}else{savedProjects.value='';activeProjectId='';}
 }
-
-async function saveRecord(project) {
-  const database = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction('projects', 'readwrite');
-    transaction.objectStore('projects').put(project);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error || new Error('Proyek gagal disimpan.'));
-    transaction.onabort = () => reject(transaction.error || new Error('Penyimpanan dibatalkan.'));
-  });
-}
-
-async function getAllProjects() {
-  const database = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const request = database.transaction('projects', 'readonly').objectStore('projects').getAll();
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = () => reject(request.error || new Error('Daftar proyek gagal dibaca.'));
-  });
-}
-
-async function refreshProjects(selectId = '') {
-  const projects = await getAllProjects();
-  projects.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  savedProjects.innerHTML = '';
-  if (!projects.length) {
-    savedProjects.add(new Option('Belum ada proyek tersimpan', ''));
-    return;
-  }
-  savedProjects.add(new Option('Pilih proyek...', ''));
-  projects.forEach(project => {
-    const date = project.updatedAt ? new Date(project.updatedAt).toLocaleString('id-ID') : '';
-    savedProjects.add(new Option(project.name + (date ? ' — ' + date : ''), project.id));
-  });
-  if (selectId) savedProjects.value = selectId;
-}
-
-document.getElementById('saveProject').addEventListener('click', async () => {
-  const name = projectName.value.trim();
-  const prompt = promptField.value.trim();
-  if (!name) {
-    setStatus('Isi nama proyek terlebih dahulu.');
-    projectName.focus();
-    return;
-  }
-  if (!prompt) {
-    setStatus('Isi prompt video terlebih dahulu.');
-    promptField.focus();
-    return;
-  }
-  const imageData = selectedImageData || '';
-  try {
-    const project = {
-      id: 'project-' + Date.now(),
-      name,
-      prompt,
-      imageData,
-      mode,
-      ratio: document.getElementById('ratio').value,
-      resolution: resolution.value,
-      duration: duration.value,
-      updatedAt: Date.now()
-    };
-    await saveRecord(project);
-    await refreshProjects(project.id);
-    setStatus('Proyek "' + name.replace(/[<>]/g, '') + '" berhasil disimpan di perangkat ini.');
-  } catch (error) {
-    setStatus('Tidak bisa menyimpan proyek: ' + error.message);
-  }
+document.getElementById('saveProject').addEventListener('click',async()=>{
+ const name=projectName.value.trim();if(!valid(name))return;
+ try{const p=collect('project-'+Date.now(),name);await putProject(p);activeProjectId=p.id;await refresh(p.id);setStatus('Proyek baru "'+safe(name)+'" berhasil disimpan.');}
+ catch(e){setStatus('Gagal menyimpan proyek: '+e.message);}
 });
-
-document.getElementById('loadProject').addEventListener('click', async () => {
-  const id = savedProjects.value;
-  if (!id) {
-    setStatus('Pilih proyek yang ingin dibuka terlebih dahulu.');
-    return;
-  }
-  try {
-    const projects = await getAllProjects();
-    const project = projects.find(item => item.id === id);
-    if (!project) {
-      setStatus('Proyek tidak ditemukan. Muat ulang daftar proyek.');
-      return;
-    }
-    projectName.value = project.name || '';
-    promptField.value = project.prompt || '';
-    document.getElementById('ratio').value = project.ratio || '9:16 — Vertikal';
-    resolution.value = project.resolution === '720p' ? '720p' : '480p';
-    updateDuration(project.duration === '5');
-    if (project.resolution === '720p') duration.value = '5';
-    else duration.value = project.duration === '5' ? '5' : '10';
-    setMode(project.mode === 'BYOK' ? 'BYOK' : 'Free');
-
-    selectedImageData = project.imageData || '';
-    file.value = '';
-    if (selectedImageData) {
-      preview.src = selectedImageData;
-      preview.style.display = 'block';
-    } else {
-      preview.removeAttribute('src');
-      preview.style.display = 'none';
-    }
-    setStatus('Proyek "' + (project.name || 'tanpa nama').replace(/[<>]/g, '') + '" berhasil dibuka.');
-  } catch (error) {
-    setStatus('Tidak bisa membuka proyek: ' + error.message);
-  }
+savedProjects.addEventListener('change',()=>{activeProjectId=savedProjects.value;});
+document.getElementById('loadProject').addEventListener('click',async()=>{
+ const id=savedProjects.value;if(!id){setStatus('Pilih proyek terlebih dahulu.');return;}
+ try{const p=await getProject(id);if(!p){setStatus('Proyek tidak ditemukan.');return;}
+ activeProjectId=id;projectName.value=p.name||'';promptField.value=p.prompt||'';
+ document.getElementById('ratio').value=p.ratio||'9:16 — Vertikal';
+ resolution.value=p.resolution==='720p'?'720p':'480p';updateDuration(p.duration==='5');
+ duration.value=p.resolution==='720p'?'5':(p.duration==='5'?'5':'10');setMode(p.mode==='BYOK'?'BYOK':'Free');
+ selectedImageData=p.imageData||'';file.value='';
+ if(selectedImageData){preview.src=selectedImageData;preview.style.display='block';}else{preview.removeAttribute('src');preview.style.display='none';}
+ setStatus('Proyek "'+safe(p.name)+'" berhasil dibuka.');
+ }catch(e){setStatus('Gagal membuka proyek: '+e.message);}
 });
-
-document.getElementById('generate').addEventListener('click', () => {
-  const p = promptField.value.trim();
-  const hasImage = Boolean(selectedImageData || (file.files && file.files[0]));
-  if (!hasImage || !p) {
-    setStatus('Lengkapi gambar referensi dan prompt terlebih dahulu.');
-    return;
-  }
-  if (resolution.value === '720p' && duration.value !== '5') {
-    setStatus('720p hanya mendukung 5 detik pada aturan Zoan AI Studio saat ini.');
-    return;
-  }
-  setStatus('Bahan siap: ' + resolution.value + ', ' + duration.value + ' detik, jalur ' + mode + '. Ini masih demo antarmuka—mesin AI belum terhubung, jadi belum ada video yang dibuat atau biaya API yang dikenakan.');
+document.getElementById('updateProject').addEventListener('click',async()=>{
+ const id=savedProjects.value,name=projectName.value.trim();if(!id){setStatus('Pilih proyek yang ingin diperbarui.');return;}if(!valid(name))return;
+ try{if(!(await getProject(id))){setStatus('Proyek tidak ditemukan.');return;}await putProject(collect(id,name));activeProjectId=id;await refresh(id);setStatus('Proyek "'+safe(name)+'" berhasil diperbarui.');}
+ catch(e){setStatus('Gagal memperbarui proyek: '+e.message);}
 });
-
-refreshProjects().catch(error => {
-  savedProjects.innerHTML = '';
-  savedProjects.add(new Option('Penyimpanan belum tersedia', ''));
-  setStatus('Fitur penyimpanan tidak dapat dibuka: ' + error.message);
+document.getElementById('renameProject').addEventListener('click',async()=>{
+ const id=savedProjects.value,name=projectName.value.trim();if(!id){setStatus('Pilih proyek yang ingin diganti namanya.');return;}if(!name){setStatus('Isi nama baru pada kolom Nama proyek.');return;}
+ try{const p=await getProject(id);if(!p){setStatus('Proyek tidak ditemukan.');return;}p.name=name;p.updatedAt=Date.now();await putProject(p);await refresh(id);setStatus('Nama proyek berhasil diubah menjadi "'+safe(name)+'".');}
+ catch(e){setStatus('Gagal mengganti nama: '+e.message);}
 });
+document.getElementById('deleteProject').addEventListener('click',async()=>{
+ const id=savedProjects.value;if(!id){setStatus('Pilih proyek yang ingin dihapus.');return;}
+ try{const p=await getProject(id);if(!p){setStatus('Proyek tidak ditemukan.');return;}
+ if(!confirm('Hapus proyek "'+(p.name||'tanpa nama')+'"?'))return;
+ await removeProject(id);activeProjectId='';await refresh('');setStatus('Proyek "'+safe(p.name)+'" berhasil dihapus.');}
+ catch(e){setStatus('Gagal menghapus proyek: '+e.message);}
+});
+document.getElementById('generate').addEventListener('click',()=>{
+ const p=promptField.value.trim(),hasImage=Boolean(selectedImageData||(file.files&&file.files[0]));
+ if(!hasImage||!p){setStatus('Lengkapi gambar referensi dan prompt terlebih dahulu.');return;}
+ if(resolution.value==='720p'&&duration.value!=='5'){setStatus('720p hanya mendukung 5 detik.');return;}
+ setStatus('Bahan siap: '+resolution.value+', '+duration.value+' detik, jalur '+mode+'. Ini masih demo—mesin AI belum terhubung.');
+});
+refresh().catch(e=>setStatus('Penyimpanan tidak tersedia: '+e.message));
 </script>
 </body></html>
