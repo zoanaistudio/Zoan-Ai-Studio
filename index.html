@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b1220">
-<title>Zoan AI Studio — v0.2</title>
+<title>Zoan AI Studio — v0.3</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1220;--panel:#121d30;--panel2:#17253b;--line:#263752;--muted:#9aabc2;--text:#edf4ff;--blue:#64b5ff;--cyan:#68e0d2;--green:#8be0ad}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% -10%,#19385a 0,transparent 34%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -18,7 +18,7 @@
 <div class="wrap">
 <header class="top">
  <div class="brand"><div class="logo">Z</div><div><b>Zoan AI Studio</b><small>Creative video workspace</small></div></div>
- <span class="tag">PROTOTYPE · v0.2</span>
+ <span class="tag">PROTOTYPE · v0.3</span>
 </header>
 <section class="hero">
  <div class="eyebrow">CREATE · EXPERIMENT · GROW</div>
@@ -41,12 +41,27 @@
   <div class="field"><label for="ratio">4. Rasio video</label><select id="ratio"><option>9:16 — Vertikal</option><option>16:9 — Landscape</option><option>1:1 — Persegi</option></select></div>
   <div class="field"><label for="resolution">5. Resolusi video</label><select id="resolution"><option value="480p" selected>480p</option><option value="720p">720p</option></select></div>
   <div class="field"><label for="duration">6. Durasi target</label><select id="duration"><option value="5">5 detik</option><option value="10" selected>10 detik</option></select><small id="durationHint" style="display:block;color:#9aabc2;margin-top:6px">480p: pilihan durasi 5 atau 10 detik.</small></div>
+
+  <div class="field">
+   <label for="projectName">7. Nama proyek</label>
+   <input id="projectName" type="text" placeholder="Contoh: Zoan dan Zia — Episode 1">
+  </div>
+  <div class="field">
+   <button class="btn" id="saveProject" type="button">Simpan Proyek</button>
+  </div>
+  <div class="field">
+   <label for="savedProjects">Proyek tersimpan</label>
+   <select id="savedProjects"><option value="">Memuat daftar proyek...</option></select>
+   <button class="btn" id="loadProject" type="button">Buka Proyek</button>
+  </div>
+  <div class="notice">Proyek disimpan di browser/perangkat ini. Belum tersinkron ke akun GitHub atau perangkat lain.</div>
   <button class="btn" id="generate">Siapkan generasi (demo)</button>
   <div class="notice" id="status"><b>Status:</b> Belum ada generasi. Tombol demo hanya memeriksa isian; belum mengirim video ke mesin AI.</div>
  </main>
  <aside class="card">
-  <h2>Ruang kerja proyek</h2><p class="sub">Tahap awal—belum terhubung ke akun atau database.</p>
-  <div class="sidebox"><h3>Aturan resolusi & durasi</h3><p>480p mendukung 5 atau 10 detik. 720p dibatasi maksimal 5 detik. Pilihan durasi menyesuaikan resolusi secara otomatis.</p></div>
+  <h2>Ruang kerja proyek</h2><p class="sub">Penyimpanan proyek lokal di browser/perangkat ini. Belum memakai server atau database online.</p>
+  <div class="sidebox"><h3>Penyimpanan proyek</h3><p>Proyek disimpan di browser pada perangkat ini. Jika data browser dihapus atau memakai perangkat/browser lain, proyek mungkin tidak tersedia.</p></div>
+   <div class="sidebox"><h3>Aturan resolusi & durasi</h3><p>480p mendukung 5 atau 10 detik. 720p dibatasi maksimal 5 detik. Pilihan durasi menyesuaikan resolusi secara otomatis.</p></div>
   <div class="sidebox"><h3>Mode Free</h3><p>Jika nanti ada penyedia yang menawarkan kuota gratis dan mengizinkan integrasi, kita bisa menghubungkannya dengan batas harian.</p></div>
   <div class="sidebox"><h3>Mode BYOK</h3><p>Pengguna memakai akun dan API key penyedia sendiri. API key tidak boleh ditempel di halaman publik atau disimpan tanpa perlindungan.</p></div>
   <div class="sidebox"><h3>Roadmap</h3>
@@ -62,34 +77,214 @@
 <div class="footer">Zoan AI Studio · Dibangun bertahap dari nol</div>
 </div>
 <script>
-const file=document.getElementById('imageFile'), preview=document.getElementById('preview');
-file.addEventListener('change',()=>{const f=file.files&&file.files[0];if(!f)return;preview.src=URL.createObjectURL(f);preview.style.display='block';});
-let mode='Free';
-function setMode(next){mode=next;document.getElementById('freeMode').classList.toggle('active',next==='Free');document.getElementById('byokMode').classList.toggle('active',next==='BYOK');}
-document.getElementById('freeMode').addEventListener('click',()=>setMode('Free'));
-document.getElementById('byokMode').addEventListener('click',()=>setMode('BYOK'));
-const resolution=document.getElementById('resolution');
-const duration=document.getElementById('duration');
-const durationHint=document.getElementById('durationHint');
-function updateDuration(){
- if(resolution.value==='720p'){
-  duration.innerHTML='<option value="5">5 detik</option>';
-  duration.value='5';
-  durationHint.textContent='720p: durasi dibatasi maksimal 5 detik.';
- }else{
-  duration.innerHTML='<option value="5">5 detik</option><option value="10">10 detik</option>';
-  duration.value='10';
-  durationHint.textContent='480p: pilihan durasi 5 atau 10 detik.';
- }
+const file = document.getElementById('imageFile');
+const preview = document.getElementById('preview');
+const promptField = document.getElementById('prompt');
+const projectName = document.getElementById('projectName');
+const savedProjects = document.getElementById('savedProjects');
+const status = document.getElementById('status');
+const resolution = document.getElementById('resolution');
+const duration = document.getElementById('duration');
+const durationHint = document.getElementById('durationHint');
+
+let mode = 'Free';
+let selectedImageData = '';
+
+function setStatus(message) {
+  status.innerHTML = '<b>Status:</b> ' + message;
 }
-resolution.addEventListener('change',updateDuration);
+
+function setMode(next) {
+  mode = next;
+  document.getElementById('freeMode').classList.toggle('active', next === 'Free');
+  document.getElementById('byokMode').classList.toggle('active', next === 'BYOK');
+}
+document.getElementById('freeMode').addEventListener('click', () => setMode('Free'));
+document.getElementById('byokMode').addEventListener('click', () => setMode('BYOK'));
+
+function updateDuration(keepFive = false) {
+  if (resolution.value === '720p') {
+    duration.innerHTML = '<option value="5">5 detik</option>';
+    duration.value = '5';
+    durationHint.textContent = '720p: durasi dibatasi maksimal 5 detik.';
+  } else {
+    duration.innerHTML = '<option value="5">5 detik</option><option value="10">10 detik</option>';
+    duration.value = keepFive ? '5' : '10';
+    durationHint.textContent = '480p: pilihan durasi 5 atau 10 detik.';
+  }
+}
+resolution.addEventListener('change', () => updateDuration(false));
 updateDuration();
-document.getElementById('generate').addEventListener('click',()=>{
- const p=document.getElementById('prompt').value.trim(), f=file.files&&file.files[0];
- const status=document.getElementById('status');
- if(!f||!p){status.innerHTML='<b>Status:</b> Lengkapi gambar referensi dan prompt terlebih dahulu.';return;}
- if(resolution.value==='720p'&&duration.value!=='5'){status.innerHTML='<b>Status:</b> 720p hanya mendukung 5 detik pada aturan Zoan AI Studio saat ini.';return;}
- status.innerHTML='<b>Status:</b> Bahan siap: '+resolution.value+', '+duration.value+' detik, jalur '+mode+'. Ini masih demo antarmuka—mesin AI belum terhubung, jadi belum ada video yang dibuat atau biaya API yang dikenakan.';
+
+file.addEventListener('change', () => {
+  const selected = file.files && file.files[0];
+  if (!selected) return;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(selected.type)) {
+    setStatus('Gunakan gambar PNG, JPG, atau WEBP.');
+    file.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    selectedImageData = String(reader.result || '');
+    preview.src = selectedImageData;
+    preview.style.display = 'block';
+    setStatus('Gambar referensi siap digunakan.');
+  };
+  reader.onerror = () => setStatus('Gambar gagal dibaca. Coba pilih ulang.');
+  reader.readAsDataURL(selected);
+});
+
+// Penyimpanan lokal menggunakan IndexedDB (tanpa server/biaya hosting tambahan).
+const DB_NAME = 'ZoanAIStudioDB';
+const DB_VERSION = 1;
+let dbPromise;
+
+function openDatabase() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) {
+      reject(new Error('Browser ini belum mendukung penyimpanan proyek.'));
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains('projects')) {
+        database.createObjectStore('projects', { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Database tidak bisa dibuka.'));
+  });
+  return dbPromise;
+}
+
+async function saveRecord(project) {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction('projects', 'readwrite');
+    transaction.objectStore('projects').put(project);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error || new Error('Proyek gagal disimpan.'));
+    transaction.onabort = () => reject(transaction.error || new Error('Penyimpanan dibatalkan.'));
+  });
+}
+
+async function getAllProjects() {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const request = database.transaction('projects', 'readonly').objectStore('projects').getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error || new Error('Daftar proyek gagal dibaca.'));
+  });
+}
+
+async function refreshProjects(selectId = '') {
+  const projects = await getAllProjects();
+  projects.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  savedProjects.innerHTML = '';
+  if (!projects.length) {
+    savedProjects.add(new Option('Belum ada proyek tersimpan', ''));
+    return;
+  }
+  savedProjects.add(new Option('Pilih proyek...', ''));
+  projects.forEach(project => {
+    const date = project.updatedAt ? new Date(project.updatedAt).toLocaleString('id-ID') : '';
+    savedProjects.add(new Option(project.name + (date ? ' — ' + date : ''), project.id));
+  });
+  if (selectId) savedProjects.value = selectId;
+}
+
+document.getElementById('saveProject').addEventListener('click', async () => {
+  const name = projectName.value.trim();
+  const prompt = promptField.value.trim();
+  if (!name) {
+    setStatus('Isi nama proyek terlebih dahulu.');
+    projectName.focus();
+    return;
+  }
+  if (!prompt) {
+    setStatus('Isi prompt video terlebih dahulu.');
+    promptField.focus();
+    return;
+  }
+  const imageData = selectedImageData || '';
+  try {
+    const project = {
+      id: 'project-' + Date.now(),
+      name,
+      prompt,
+      imageData,
+      mode,
+      ratio: document.getElementById('ratio').value,
+      resolution: resolution.value,
+      duration: duration.value,
+      updatedAt: Date.now()
+    };
+    await saveRecord(project);
+    await refreshProjects(project.id);
+    setStatus('Proyek "' + name.replace(/[<>]/g, '') + '" berhasil disimpan di perangkat ini.');
+  } catch (error) {
+    setStatus('Tidak bisa menyimpan proyek: ' + error.message);
+  }
+});
+
+document.getElementById('loadProject').addEventListener('click', async () => {
+  const id = savedProjects.value;
+  if (!id) {
+    setStatus('Pilih proyek yang ingin dibuka terlebih dahulu.');
+    return;
+  }
+  try {
+    const projects = await getAllProjects();
+    const project = projects.find(item => item.id === id);
+    if (!project) {
+      setStatus('Proyek tidak ditemukan. Muat ulang daftar proyek.');
+      return;
+    }
+    projectName.value = project.name || '';
+    promptField.value = project.prompt || '';
+    document.getElementById('ratio').value = project.ratio || '9:16 — Vertikal';
+    resolution.value = project.resolution === '720p' ? '720p' : '480p';
+    updateDuration(project.duration === '5');
+    if (project.resolution === '720p') duration.value = '5';
+    else duration.value = project.duration === '5' ? '5' : '10';
+    setMode(project.mode === 'BYOK' ? 'BYOK' : 'Free');
+
+    selectedImageData = project.imageData || '';
+    file.value = '';
+    if (selectedImageData) {
+      preview.src = selectedImageData;
+      preview.style.display = 'block';
+    } else {
+      preview.removeAttribute('src');
+      preview.style.display = 'none';
+    }
+    setStatus('Proyek "' + (project.name || 'tanpa nama').replace(/[<>]/g, '') + '" berhasil dibuka.');
+  } catch (error) {
+    setStatus('Tidak bisa membuka proyek: ' + error.message);
+  }
+});
+
+document.getElementById('generate').addEventListener('click', () => {
+  const p = promptField.value.trim();
+  const hasImage = Boolean(selectedImageData || (file.files && file.files[0]));
+  if (!hasImage || !p) {
+    setStatus('Lengkapi gambar referensi dan prompt terlebih dahulu.');
+    return;
+  }
+  if (resolution.value === '720p' && duration.value !== '5') {
+    setStatus('720p hanya mendukung 5 detik pada aturan Zoan AI Studio saat ini.');
+    return;
+  }
+  setStatus('Bahan siap: ' + resolution.value + ', ' + duration.value + ' detik, jalur ' + mode + '. Ini masih demo antarmuka—mesin AI belum terhubung, jadi belum ada video yang dibuat atau biaya API yang dikenakan.');
+});
+
+refreshProjects().catch(error => {
+  savedProjects.innerHTML = '';
+  savedProjects.add(new Option('Penyimpanan belum tersedia', ''));
+  setStatus('Fitur penyimpanan tidak dapat dibuka: ' + error.message);
 });
 </script>
 </body></html>
